@@ -31,7 +31,7 @@ it did before the console had the file.
 #include <time.h>
 #include "tomlc17.h"
 
-#ifndef HALO_XBOX_CONSOLE
+#if !defined(HALO_XBOX_CONSOLE) && !defined(HALO_PS3)
 #include <SDL3/SDL.h>
 #endif
 #include <ctype.h>
@@ -49,7 +49,7 @@ void host_storage_commit(void);
 #endif
 #endif
 
-#ifdef HALO_XBOX_CONSOLE
+#if defined(HALO_XBOX_CONSOLE) || defined(HALO_PS3)
 /* (the console's C runtime's) */
 #define SDL_strncasecmp _strnicmp
 #endif
@@ -249,6 +249,25 @@ static const struct config_setting config_settings[] =
 #endif
 	{ "display.screen_width", _config_integer, "0", "HALO_SCREEN_WIDTH", _environment_value, _platform_android,
 		"The picture's width in columns. 0 matches the display. 640 is 4:3." },
+#ifdef HALO_PS3
+	/* the PS3's renderer (port/ps3/xbox/d3d8_rsx.c) and its button icons (hud_hires_rsx.c) */
+	{ "display.button_icons", _config_string, "\"style_a\"", "HALO_BUTTON_ICONS", _environment_value, _platform_android,
+		"The controller's buttons in the menus and messages: \"xbox\" for the\n"
+		"maps' own; the PS3's \"style_a\" (colored circles, white symbols) or\n"
+		"\"style_b\" (black circles, colored symbols)." },
+	{ "display.half_resolution_particles", _config_boolean, "false", "HALO_HALF_RESOLUTION_PARTICLES",
+		_environment_value, _platform_android,
+		"Draw the effects in front of every other transparent surface (the\n"
+		"nearest particles) at half the width and height, then blend them over\n"
+		"the frame: faster with many of them, a little softer; false draws them\n"
+		"as the Xbox does." },
+	{ "display.dynamic_resolution", _config_boolean, "true", "HALO_DYNAMIC_RESOLUTION", _environment_value,
+		_platform_android,
+		"While the RSX is too slow for 60 frames a second, draw the 3D view\n"
+		"smaller (down to 5/8 of the width and height), then scale it up under\n"
+		"the HUD: steadier in heavy scenes, softer while it acts; false always\n"
+		"draws it whole." },
+#endif
 	{ "display.vsync", _config_boolean, "true", "HALO_NO_VSYNC", _environment_set_is_false, _platform_all,
 		"Wait for the display between frames (V-Sync)." },
 	{ "display.max_fps", _config_integer, "0", "HALO_MAX_FPS", _environment_value, _platform_all,
@@ -1336,7 +1355,7 @@ static const struct
 
 #define NUMBER_OF_CONFIG_SECTIONS (sizeof(config_sections) / sizeof(config_sections[0]))
 
-#ifdef HALO_ANDROID
+#if defined(HALO_ANDROID) || defined(HALO_PS3)
 #define CONFIG_PLATFORM _platform_android
 #elif defined(HALO_XBOX_CONSOLE)
 #define CONFIG_PLATFORM _platform_xbox
@@ -1380,7 +1399,7 @@ static pthread_mutex_t config_lock = PTHREAD_MUTEX_INITIALIZER;
 
 int platform_packaged(void)
 {
-#if defined(HALO_ANDROID) || defined(HALO_XBOX_CONSOLE)
+#if defined(HALO_ANDROID) || defined(HALO_XBOX_CONSOLE) || defined(HALO_PS3)
 	return 0;
 #else
 	static int packaged = -1;
@@ -1484,6 +1503,9 @@ static void config_path(char *path, size_t size)
 #if defined(HALO_XBOX_CONSOLE)
 	/* beside default.xbe */
 	snprintf(path, size, "d:\\config.toml");
+#elif defined(HALO_PS3)
+	/* beside the saves, on the HDD (port/ps3/xbox/xbox_files.c) */
+	snprintf(path, size, "%s/config.toml", platform_save_root());
 #elif defined(HALO_ANDROID)
 	/* the data folder, which the app names (port/android/host/host_main.c) */
 	const char *root = getenv("HALO_DATA_ROOT");
@@ -1500,7 +1522,7 @@ static void config_path(char *path, size_t size)
 /* the whole file, NUL terminated, or NULL; free() it */
 static char *config_read_file(const char *path, size_t *size)
 {
-#if defined(HALO_ANDROID) || defined(HALO_XBOX_CONSOLE)
+#if defined(HALO_ANDROID) || defined(HALO_XBOX_CONSOLE) || defined(HALO_PS3)
 	FILE *file = fopen(path, "rb");
 	char *text = NULL;
 	long length;
@@ -1543,7 +1565,7 @@ static char *config_read_file(const char *path, size_t *size)
 
 static int config_write_file(const char *path, const char *text)
 {
-#if defined(HALO_ANDROID) || defined(HALO_XBOX_CONSOLE)
+#if defined(HALO_ANDROID) || defined(HALO_XBOX_CONSOLE) || defined(HALO_PS3)
 	FILE *file = fopen(path, "wb");
 	int written;
 
@@ -1678,7 +1700,7 @@ static void config_append_setting(struct config_text *text, const struct config_
 		if (*line)
 			line++;
 	}
-#if !defined(HALO_ANDROID) && !defined(HALO_XBOX_CONSOLE)
+#if !defined(HALO_ANDROID) && !defined(HALO_XBOX_CONSOLE) && !defined(HALO_PS3)
 	/* (Android apps and the console have no environment to set) */
 	switch (setting->environment_style)
 	{
@@ -1721,7 +1743,7 @@ how to go back to the defaults */
 	"#\n" \
 	"# The sections after the Advanced note at the end are for testing and\n" \
 	"# support.\n"
-#elif defined(HALO_ANDROID)
+#elif defined(HALO_ANDROID) || defined(HALO_PS3)
 #define CONFIG_FILE_HEADER \
 	"# Chupathingy settings\n" \
 	"#\n" \
@@ -3296,7 +3318,7 @@ static int config_skip_line(char *text, int line_number, const char *message)
 	return 1;
 }
 
-#if !defined(HALO_ANDROID) && !defined(HALO_XBOX_CONSOLE)
+#if !defined(HALO_ANDROID) && !defined(HALO_XBOX_CONSOLE) && !defined(HALO_PS3)
 /* a config.toml the game never reads, likely edited in its place: said in
 the log, with the one it reads (path) */
 static void config_report_unread(const char *path)
@@ -3381,7 +3403,7 @@ static void config_load(void)
 	}
 
 	config_path(path, sizeof(path));
-#if !defined(HALO_ANDROID) && !defined(HALO_XBOX_CONSOLE)
+#if !defined(HALO_ANDROID) && !defined(HALO_XBOX_CONSOLE) && !defined(HALO_PS3)
 	config_report_unread(path);
 #endif
 	text = config_read_file(path, &size);
@@ -3580,7 +3602,7 @@ static void config_load(void)
 	}
 #endif
 	config_check_words();
-#if !defined(HALO_ANDROID) && !defined(HALO_XBOX_CONSOLE)
+#if !defined(HALO_ANDROID) && !defined(HALO_XBOX_CONSOLE) && !defined(HALO_PS3)
 	{
 		long mode = config_setting_index("display.mode");
 		long fullscreen = config_setting_index("display.fullscreen");
